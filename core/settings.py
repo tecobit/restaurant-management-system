@@ -25,7 +25,9 @@ SECRET_KEY = 'django-insecure-6tip4+za1x5dgdmk)@a7qp&m4#9_%4gn!5_rbyrt2b-cae%=hm
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ["*"]
+ALLOWED_HOSTS = [
+    "restaurant-management-system.tecobit.cloud",
+    "*"]
 
 # Application definition
 
@@ -42,9 +44,11 @@ INSTALLED_APPS = [
     'api',
 ]
 
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-# ]
+CORS_ALLOWED_ORIGINS = [
+    "https://restaurant-management-system.tecobit.cloud",
+    'http://localhost:3000',
+    'http://127.0.0.1:8000',
+]
 
 CORS_ALLOW_CREDENTIALS = True
 
