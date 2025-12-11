@@ -1,0 +1,551 @@
+erDiagram
+    %% ==========================================
+    %% 1. CORE & AUTH MODULE (Users & Tenants)
+    %% ==========================================
+    CORE_Tenant {
+        uuid id PK
+        string name
+        string domain UK "FR-03: Unique for routing"
+        string status "ACTIVE, SUSPENDED, TRIAL"
+        json settings "currency, tax_rate, timezone, grace_period"
+        timestamp created_at
+        timestamp updated_at
+    }
+    CORE_User {
+        uuid id PK
+        uuid tenant_id FK
+        string email UK
+        string password_hash
+        string role "Admin, Manager, Waiter, Kitchen"
+        boolean is_active
+        timestamp last_login_at
+        timestamp created_at
+        timestamp deleted_at "FR-10: Soft delete"
+    }
+    CORE_Notification {
+        uuid id PK
+        uuid tenant_id FK
+        uuid user_id FK "Nullable for broadcast"
+        string type "LOW_STOCK, RESERVATION, ORDER"
+        string title
+        text message
+        json metadata
+        boolean is_read
+        timestamp created_at
+    }
+    CORE_AuditLog {
+        uuid id PK
+        uuid tenant_id FK
+        uuid user_id FK
+        string entity_type
+        uuid entity_id
+        string action "CREATE, UPDATE, DELETE"
+        json old_values
+        json new_values
+        string ip_address
+        timestamp created_at
+    }
+
+    %% ==========================================
+    %% 2. MENU MODULE (The Catalog)
+    %% ==========================================
+    MENU_Category {
+        uuid id PK
+        uuid tenant_id FK "Missing: Multi-tenancy"
+        string name
+        string description
+        string image_url
+        int sort_order "FR-06"
+        boolean is_active
+        timestamp deleted_at
+    }
+    MENU_Item {
+        uuid id PK
+        uuid tenant_id FK "Missing: Multi-tenancy"
+        uuid category_id FK
+        string name
+        string description
+        string image_url
+        decimal price
+        decimal cost_price "For margin calculation"
+        boolean is_available "FR-08: 86'd switch"
+        json taxes
+        json allergens "Required for compliance"
+        int prep_time_minutes
+        timestamp created_at
+        timestamp updated_at
+        timestamp deleted_at "FR-10: Soft delete"
+    }
+    MENU_ModifierGroup {
+        uuid id PK
+        uuid tenant_id FK
+        string name
+        int min_selection "FR-11"
+        int max_selection "FR-11"
+        boolean is_required
+        int sort_order
+    }
+    MENU_Modifier {
+        uuid id PK
+        uuid group_id FK
+        string name
+        decimal price_adjustment
+        boolean is_available
+        int sort_order
+    }
+    MENU_Item_ModifierGroup_Link {
+        uuid id PK "Added: Proper PK"
+        uuid item_id FK
+        uuid group_id FK
+        decimal override_price "FR-13: Optional override"
+        int sort_order
+    }
+
+    %% ==========================================
+    %% 3. INVENTORY MODULE (The Recipe Engine)
+    %% ==========================================
+    INV_Supplier {
+        uuid id PK
+        uuid tenant_id FK
+        string name
+        string contact_email
+        string contact_phone
+        text address
+        string payment_terms
+        boolean is_active
+    }
+    INV_Ingredient {
+        uuid id PK
+        uuid tenant_id FK
+        uuid supplier_id FK
+        string name
+        string sku
+        string unit "FR-15: Base unit"
+        string unit_category "MASS, VOLUME, COUNT"
+        decimal current_stock
+        decimal reorder_level "FR-16"
+        decimal reorder_quantity
+        decimal cost_per_unit
+        timestamp last_restocked_at
+    }
+    INV_Recipe {
+        uuid id PK
+        uuid menu_item_id FK
+        text instruction_text
+        int yield_quantity "Portions per batch"
+        decimal theoretical_cost "FR-17: Calculated"
+    }
+    INV_RecipeItem {
+        uuid id PK
+        uuid recipe_id FK
+        uuid ingredient_id FK
+        decimal quantity_needed
+        string unit
+    }
+    INV_StockLog {
+        uuid id PK
+        uuid tenant_id FK
+        uuid ingredient_id FK
+        uuid order_id FK "Nullable: Links to sale"
+        uuid user_id FK "Who performed action"
+        string action "FR-20: DEDUCT_SALE, RESTOCK, WASTE, AUDIT"
+        decimal quantity_change
+        decimal balance_after
+        text notes
+        timestamp created_at "FR-19: Immutable"
+    }
+    INV_PurchaseOrder {
+        uuid id PK
+        uuid tenant_id FK
+        uuid supplier_id FK
+        uuid created_by FK
+        string po_number UK
+        string status "DRAFT, SENT, RECEIVED, CANCELLED"
+        decimal total_amount
+        text notes
+        timestamp expected_delivery
+        timestamp created_at
+    }
+    INV_PurchaseOrderItem {
+        uuid id PK
+        uuid purchase_order_id FK
+        uuid ingredient_id FK
+        decimal quantity_ordered
+        decimal quantity_received
+        decimal unit_cost
+    }
+
+    %% ==========================================
+    %% 4. POS & ORDER MODULE (The Transaction)
+    %% ==========================================
+    POS_Order {
+        uuid id PK
+        uuid tenant_id FK
+        uuid table_id FK "Nullable for delivery"
+        uuid staff_id FK
+        uuid customer_id FK "FR-22: Nullable"
+        string order_number UK "Human readable"
+        string status "FR-21: State machine"
+        string order_type "DINE_IN, TAKEOUT, DELIVERY"
+        decimal subtotal
+        decimal tax_amount
+        decimal discount_amount
+        decimal total_amount
+        text notes
+        timestamp created_at
+        timestamp updated_at
+    }
+    POS_OrderItem {
+        uuid id PK
+        uuid order_id FK
+        uuid menu_item_id FK
+        string item_name_snapshot "FR-09: Preserve history"
+        int quantity
+        decimal unit_price "FR-09: Price at sale time"
+        json active_modifiers "FR-23: Snapshot"
+        string status "FR-24: QUEUED, COOKING, DONE"
+        text special_instructions
+        timestamp sent_to_kitchen_at
+        timestamp completed_at
+    }
+    POS_OrderDiscount {
+        uuid id PK
+        uuid order_id FK
+        string discount_type "PERCENTAGE, FIXED, PROMO"
+        string code "Nullable promo code"
+        decimal value
+        decimal amount_applied
+    }
+    POS_Transaction {
+        uuid id PK
+        uuid order_id FK
+        uuid processed_by FK
+        decimal amount
+        decimal tip_amount "FR-26"
+        string method "CASH, CARD, QR, VOUCHER"
+        string status "PENDING, COMPLETED, REFUNDED"
+        string gateway_ref
+        json gateway_response
+        timestamp created_at
+    }
+    POS_Refund {
+        uuid id PK
+        uuid transaction_id FK
+        uuid approved_by FK
+        decimal amount
+        string reason
+        timestamp created_at
+    }
+    POS_FiscalReceipt {
+        uuid id PK
+        uuid transaction_id FK
+        string receipt_number UK
+        string fiscal_signature "FR-27: SHA-256"
+        string previous_hash "FR-27: Chain link"
+        json raw_data_snapshot
+        timestamp created_at
+    }
+
+    %% ==========================================
+    %% 5. CRM MODULE (Customers) - NEW
+    %% ==========================================
+    CRM_Customer {
+        uuid id PK
+        uuid tenant_id FK
+        string first_name
+        string last_name
+        string email UK
+        string phone
+        text default_address
+        json preferences "Allergies, favorites"
+        int loyalty_points
+        decimal total_spent
+        int visit_count
+        timestamp first_visit
+        timestamp last_visit
+        timestamp created_at
+    }
+    CRM_CustomerAddress {
+        uuid id PK
+        uuid customer_id FK
+        string label "Home, Work"
+        text address_line1
+        text address_line2
+        string city
+        string postal_code
+        decimal latitude
+        decimal longitude
+        boolean is_default
+    }
+
+    %% ==========================================
+    %% 6. BOOKINGS & TABLES (Physical Space)
+    %% ==========================================
+    RES_FloorPlan {
+        uuid id PK
+        uuid tenant_id FK
+        string name
+        int width_px
+        int height_px
+        string background_image_url
+        boolean is_active
+    }
+    RES_Table {
+        uuid id PK
+        uuid floor_id FK
+        string table_number UK
+        int seat_capacity
+        int min_capacity
+        int x_coord "FR-28"
+        int y_coord "FR-28"
+        string shape "CIRCLE, SQUARE, RECTANGLE"
+        int width_px
+        int height_px
+        boolean is_active
+    }
+    RES_Reservation {
+        uuid id PK
+        uuid tenant_id FK
+        uuid table_id FK
+        uuid customer_id FK
+        string confirmation_code UK
+        timestamp start_time "FR-30"
+        timestamp end_time "FR-30"
+        int party_size
+        string status "PENDING, CONFIRMED, SEATED, COMPLETED, NO_SHOW, CANCELLED"
+        text special_requests
+        string source "PHONE, WEBSITE, WALKIN"
+        timestamp reminded_at
+        timestamp created_at
+    }
+    RES_Waitlist {
+        uuid id PK
+        uuid tenant_id FK
+        uuid customer_id FK
+        int party_size
+        int estimated_wait_minutes
+        string status "WAITING, NOTIFIED, SEATED, LEFT"
+        timestamp joined_at
+        timestamp notified_at
+    }
+
+    %% ==========================================
+    %% 7. LOGISTICS (Delivery)
+    %% ==========================================
+    LOG_DeliveryZone {
+        uuid id PK
+        uuid tenant_id FK
+        string name
+        geometry polygon "FR-32: GeoJSON"
+        decimal area_sqkm "FR-33: For precedence"
+        decimal delivery_fee
+        int estimated_minutes
+        boolean is_active
+    }
+    LOG_Driver {
+        uuid id PK
+        uuid tenant_id FK
+        uuid user_id FK
+        string vehicle_type "BIKE, SCOOTER, CAR"
+        string license_plate
+        decimal current_lat
+        decimal current_lng
+        string status "FR-34: OFFLINE, IDLE, ON_JOB"
+        int active_order_count
+        decimal rating_avg
+        timestamp last_location_update
+    }
+    LOG_Shipment {
+        uuid id PK
+        uuid order_id FK
+        uuid driver_id FK
+        uuid zone_id FK
+        string tracking_code UK
+        text delivery_address
+        decimal delivery_lat
+        decimal delivery_lng
+        decimal delivery_fee
+        string status "PENDING, ASSIGNED, PICKED_UP, IN_TRANSIT, DELIVERED, FAILED"
+        text delivery_instructions
+        timestamp assigned_at
+        timestamp picked_up_at
+        timestamp delivered_at
+        string proof_photo_url "FR-35"
+        string recipient_name
+        text failure_reason
+    }
+    LOG_DriverLocation {
+        uuid id PK
+        uuid driver_id FK
+        uuid shipment_id FK
+        decimal latitude
+        decimal longitude
+        timestamp recorded_at
+    }
+
+    %% ==========================================
+    %% 8. HRM (Staff)
+    %% ==========================================
+    HRM_Shift {
+        uuid id PK
+        uuid tenant_id FK
+        uuid user_id FK
+        timestamp scheduled_start
+        timestamp scheduled_end
+        timestamp actual_clock_in "FR-36"
+        timestamp actual_clock_out
+        string status "SCHEDULED, CLOCKED_IN, COMPLETED, MISSED"
+        boolean is_late "FR-37"
+        int late_minutes
+        text notes
+    }
+    HRM_TimeOffRequest {
+        uuid id PK
+        uuid user_id FK
+        uuid approved_by FK
+        string type "VACATION, SICK, PERSONAL"
+        date start_date
+        date end_date
+        string status "PENDING, APPROVED, DENIED"
+        text reason
+        timestamp created_at
+    }
+
+    %% ==========================================
+    %% 9. CMS (Website Builder)
+    %% ==========================================
+    CMS_Page {
+        uuid id PK
+        uuid tenant_id FK
+        string slug UK "FR-38"
+        string title
+        string meta_description
+        json content_blocks "FR-39"
+        boolean is_published
+        timestamp published_at
+        timestamp created_at
+        timestamp updated_at
+    }
+    CMS_Media {
+        uuid id PK
+        uuid tenant_id FK
+        string filename
+        string mime_type
+        string storage_url
+        int file_size_bytes
+        string alt_text
+        timestamp uploaded_at
+    }
+
+    %% ==========================================
+    %% 10. PROMOTIONS & LOYALTY - NEW
+    %% ==========================================
+    PROMO_Campaign {
+        uuid id PK
+        uuid tenant_id FK
+        string name
+        string code UK
+        string type "PERCENTAGE, FIXED, BOGO, FREE_ITEM"
+        decimal value
+        decimal min_order_amount
+        int max_uses
+        int current_uses
+        timestamp valid_from
+        timestamp valid_until
+        boolean is_active
+    }
+    PROMO_CampaignItem {
+        uuid id PK
+        uuid campaign_id FK
+        uuid menu_item_id FK "Nullable for all items"
+        uuid category_id FK "Nullable for specific category"
+    }
+    LOYALTY_Transaction {
+        uuid id PK
+        uuid customer_id FK
+        uuid order_id FK
+        string type "EARN, REDEEM, EXPIRE, ADJUST"
+        int points
+        int balance_after
+        timestamp created_at
+    }
+
+    %% ==========================================
+    %% RELATIONSHIPS
+    %% ==========================================
+    
+    %% Core Relations
+    CORE_Tenant ||--o{ CORE_User : has
+    CORE_Tenant ||--o{ CORE_Notification : receives
+    CORE_Tenant ||--o{ CORE_AuditLog : tracks
+    CORE_User ||--o{ CORE_Notification : receives
+    CORE_User ||--o{ CORE_AuditLog : performs
+
+    %% Menu Relations
+    CORE_Tenant ||--o{ MENU_Category : owns
+    MENU_Category ||--o{ MENU_Item : contains
+    MENU_Item ||--o{ MENU_Item_ModifierGroup_Link : has
+    MENU_ModifierGroup ||--o{ MENU_Item_ModifierGroup_Link : linked_via
+    MENU_ModifierGroup ||--o{ MENU_Modifier : contains
+    
+    %% Inventory Relations
+    CORE_Tenant ||--o{ INV_Supplier : works_with
+    INV_Supplier ||--o{ INV_Ingredient : supplies
+    CORE_Tenant ||--o{ INV_Ingredient : stocks
+    MENU_Item ||--o| INV_Recipe : has_recipe
+    INV_Recipe ||--|{ INV_RecipeItem : requires
+    INV_RecipeItem }|--|| INV_Ingredient : uses
+    INV_Ingredient ||--o{ INV_StockLog : tracks
+    INV_Supplier ||--o{ INV_PurchaseOrder : receives
+    INV_PurchaseOrder ||--|{ INV_PurchaseOrderItem : contains
+    INV_Ingredient ||--o{ INV_PurchaseOrderItem : ordered_in
+
+    %% Floor & Table Relations
+    CORE_Tenant ||--o{ RES_FloorPlan : has
+    RES_FloorPlan ||--o{ RES_Table : contains
+    RES_Table ||--o{ POS_Order : hosts
+    RES_Table ||--o{ RES_Reservation : reserved_for
+
+    %% Order Relations
+    CORE_Tenant ||--o{ POS_Order : processes
+    POS_Order ||--|{ POS_OrderItem : contains
+    POS_Order ||--o{ POS_OrderDiscount : applies
+    POS_Order ||--o{ POS_Transaction : paid_via
+    POS_Transaction ||--o| POS_FiscalReceipt : generates
+    POS_Transaction ||--o{ POS_Refund : may_have
+    MENU_Item ||--o{ POS_OrderItem : sold_as
+    CORE_User ||--o{ POS_Order : creates
+
+    %% CRM Relations
+    CORE_Tenant ||--o{ CRM_Customer : serves
+    CRM_Customer ||--o{ CRM_CustomerAddress : has
+    CRM_Customer ||--o{ POS_Order : places
+    CRM_Customer ||--o{ RES_Reservation : makes
+    CRM_Customer ||--o{ LOYALTY_Transaction : earns
+
+    %% Logistics Relations
+    CORE_Tenant ||--o{ LOG_DeliveryZone : defines
+    CORE_Tenant ||--o{ LOG_Driver : employs
+    LOG_Driver ||--|| CORE_User : is_a
+    POS_Order ||--o| LOG_Shipment : ships_via
+    LOG_Driver ||--o{ LOG_Shipment : delivers
+    LOG_DeliveryZone ||--o{ LOG_Shipment : covers
+    LOG_Driver ||--o{ LOG_DriverLocation : tracked_at
+
+    %% HRM Relations
+    CORE_User ||--o{ HRM_Shift : works
+    CORE_User ||--o{ HRM_TimeOffRequest : requests
+
+    %% CMS Relations
+    CORE_Tenant ||--o{ CMS_Page : publishes
+    CORE_Tenant ||--o{ CMS_Media : stores
+
+    %% Promotions Relations
+    CORE_Tenant ||--o{ PROMO_Campaign : runs
+    PROMO_Campaign ||--o{ PROMO_CampaignItem : applies_to
+    CRM_Customer ||--o{ LOYALTY_Transaction : has
+
+    %% Reservation Relations
+    CORE_Tenant ||--o{ RES_Reservation : manages
+    CORE_Tenant ||--o{ RES_Waitlist : tracks
+    CRM_Customer ||--o{ RES_Waitlist : joins

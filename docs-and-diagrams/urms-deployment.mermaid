@@ -1,0 +1,150 @@
+flowchart TB
+    subgraph Internet["Internet"]
+        Users["👥 Users"]
+        Mobile["📱 Mobile Apps"]
+    end
+
+    subgraph AWS["AWS Cloud"]
+        subgraph Edge["Edge Layer"]
+            Route53["Route53<br/>DNS"]
+            CloudFront["CloudFront<br/>CDN"]
+            WAF["WAF<br/>Web Application Firewall"]
+        end
+
+        subgraph VPC["VPC (10.0.0.0/16)"]
+            subgraph PublicSubnet["Public Subnets (10.0.1.0/24, 10.0.2.0/24)"]
+                ALB["Application<br/>Load Balancer"]
+                NAT["NAT Gateway"]
+                Bastion["Bastion Host<br/>(SSH Jump)"]
+            end
+
+            subgraph PrivateSubnet["Private Subnets (10.0.10.0/24, 10.0.11.0/24)"]
+                subgraph ECS["ECS Cluster"]
+                    subgraph APIService["API Service"]
+                        API1["API Container<br/>Instance 1"]
+                        API2["API Container<br/>Instance 2"]
+                        API3["API Container<br/>Instance 3"]
+                    end
+                    
+                    subgraph Workers["Worker Services"]
+                        StockWorker["Stock Alert<br/>Worker"]
+                        NotifWorker["Notification<br/>Worker"]
+                        ReportWorker["Report<br/>Worker"]
+                    end
+                end
+
+                subgraph Lambda["Lambda Functions"]
+                    ImageResize["Image Resizer"]
+                    PDFGenerator["PDF Generator"]
+                    WebhookHandler["Webhook Handler"]
+                end
+            end
+
+            subgraph DataSubnet["Data Subnets (10.0.20.0/24, 10.0.21.0/24)"]
+                subgraph RDS["RDS PostgreSQL"]
+                    Primary["Primary<br/>db.r6g.xlarge"]
+                    Replica["Read Replica<br/>db.r6g.large"]
+                end
+
+                subgraph ElastiCache["ElastiCache"]
+                    Redis1["Redis Primary"]
+                    Redis2["Redis Replica"]
+                end
+
+                OpenSearch["OpenSearch<br/>Domain"]
+            end
+        end
+
+        subgraph Storage["Storage Services"]
+            S3Assets["S3<br/>Static Assets"]
+            S3Media["S3<br/>User Media"]
+            S3Backups["S3<br/>Backups"]
+        end
+
+        subgraph Messaging["Messaging"]
+            SQS["SQS Queues"]
+            SNS["SNS Topics"]
+            EventBridge["EventBridge"]
+        end
+
+        subgraph Security["Security Services"]
+            SecretsManager["Secrets Manager"]
+            KMS["KMS<br/>Encryption Keys"]
+            Cognito["Cognito<br/>User Pools"]
+        end
+
+        subgraph Monitoring["Monitoring"]
+            CloudWatch["CloudWatch<br/>Logs & Metrics"]
+            XRay["X-Ray<br/>Tracing"]
+            CloudTrail["CloudTrail<br/>Audit"]
+        end
+
+        subgraph CICD["CI/CD"]
+            CodePipeline["CodePipeline"]
+            CodeBuild["CodeBuild"]
+            ECR["ECR<br/>Container Registry"]
+        end
+    end
+
+    subgraph External["External Services"]
+        Stripe["Stripe"]
+        Twilio["Twilio"]
+        SendGrid["SendGrid"]
+        GoogleMaps["Google Maps"]
+        Sentry["Sentry"]
+    end
+
+    %% Connections
+    Users --> Route53
+    Mobile --> Route53
+    Route53 --> CloudFront
+    CloudFront --> WAF
+    WAF --> ALB
+    CloudFront --> S3Assets
+
+    ALB --> API1
+    ALB --> API2
+    ALB --> API3
+
+    API1 --> Primary
+    API2 --> Primary
+    API3 --> Replica
+    
+    API1 --> Redis1
+    API2 --> Redis1
+    API3 --> Redis2
+    
+    API1 --> OpenSearch
+    
+    API1 --> SQS
+    SQS --> StockWorker
+    SQS --> NotifWorker
+    SQS --> ReportWorker
+
+    StockWorker --> Primary
+    NotifWorker --> SNS
+    ReportWorker --> S3Backups
+
+    SNS --> Twilio
+    SNS --> SendGrid
+
+    API1 --> Stripe
+    API1 --> GoogleMaps
+    
+    Lambda --> S3Media
+    
+    Primary --> S3Backups
+    
+    API1 --> SecretsManager
+    Primary --> KMS
+    S3Media --> KMS
+    
+    API1 --> CloudWatch
+    API1 --> XRay
+    
+    CodePipeline --> CodeBuild
+    CodeBuild --> ECR
+    ECR --> ECS
+
+    Bastion --> Primary
+    NAT --> Internet

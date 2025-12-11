@@ -1,0 +1,158 @@
+flowchart TB
+    subgraph Sources["Data Sources"]
+        POS["POS Terminals"]
+        Web["Web Portal"]
+        Mobile["Mobile Apps"]
+        KDS["Kitchen Display"]
+        Driver["Driver Apps"]
+        External["External APIs"]
+    end
+
+    subgraph Ingestion["Data Ingestion"]
+        APIGateway["API Gateway"]
+        WebSocket["WebSocket Server"]
+        Webhook["Webhook Handler"]
+        FileUpload["File Upload Service"]
+    end
+
+    subgraph Processing["Data Processing"]
+        subgraph Realtime["Real-time Processing"]
+            OrderProcessor["Order Processor"]
+            PaymentProcessor["Payment Processor"]
+            InventoryProcessor["Inventory Processor"]
+            LocationProcessor["Location Processor"]
+        end
+
+        subgraph Batch["Batch Processing"]
+            ReportGenerator["Report Generator"]
+            AnalyticsETL["Analytics ETL"]
+            ReconciliationJob["Reconciliation"]
+            DataArchiver["Data Archiver"]
+        end
+
+        subgraph EventProcessing["Event Processing"]
+            EventBus["Event Bus"]
+            NotificationQueue["Notification Queue"]
+            AlertQueue["Alert Queue"]
+        end
+    end
+
+    subgraph Storage["Data Storage"]
+        subgraph Operational["Operational Data"]
+            PostgreSQL[("PostgreSQL<br/>Transactional")]
+            Redis[("Redis<br/>Cache/Sessions")]
+        end
+
+        subgraph Search["Search & Discovery"]
+            OpenSearch[("OpenSearch<br/>Full-text")]
+        end
+
+        subgraph Analytics["Analytics Data"]
+            Redshift[("Redshift<br/>Data Warehouse")]
+            S3Raw[("S3<br/>Raw Data Lake")]
+        end
+
+        subgraph Media["Media Storage"]
+            S3Media[("S3<br/>Images/Receipts")]
+            CDN["CloudFront CDN"]
+        end
+    end
+
+    subgraph Consumption["Data Consumption"]
+        subgraph Dashboards["Dashboards"]
+            AdminDash["Admin Dashboard"]
+            ManagerDash["Manager Reports"]
+            OwnerDash["Owner Analytics"]
+        end
+
+        subgraph APIs["API Consumers"]
+            RESTApi["REST API"]
+            GraphQL["GraphQL API"]
+            ReportAPI["Report API"]
+        end
+
+        subgraph BI["Business Intelligence"]
+            QuickSight["QuickSight"]
+            Metabase["Metabase"]
+            CustomReports["Custom Reports"]
+        end
+
+        subgraph Exports["Data Exports"]
+            CSVExport["CSV Export"]
+            PDFReport["PDF Reports"]
+            ExcelExport["Excel Export"]
+        end
+    end
+
+    subgraph DataFlows["Key Data Flows"]
+        direction LR
+        OrderFlow["📦 Order Data"]
+        InventoryFlow["📊 Inventory Data"]
+        FinancialFlow["💰 Financial Data"]
+        CustomerFlow["👤 Customer Data"]
+        LocationFlow["📍 Location Data"]
+    end
+
+    %% Source to Ingestion
+    POS --> APIGateway
+    Web --> APIGateway
+    Mobile --> APIGateway
+    KDS --> WebSocket
+    Driver --> WebSocket
+    External --> Webhook
+    Mobile --> FileUpload
+
+    %% Ingestion to Processing
+    APIGateway --> OrderProcessor
+    APIGateway --> PaymentProcessor
+    APIGateway --> InventoryProcessor
+    WebSocket --> LocationProcessor
+    
+    %% Real-time to Storage
+    OrderProcessor --> PostgreSQL
+    OrderProcessor --> EventBus
+    PaymentProcessor --> PostgreSQL
+    InventoryProcessor --> PostgreSQL
+    InventoryProcessor --> AlertQueue
+    LocationProcessor --> Redis
+
+    %% Event Processing
+    EventBus --> NotificationQueue
+    AlertQueue --> NotificationQueue
+
+    %% Batch Processing
+    PostgreSQL --> ReportGenerator
+    PostgreSQL --> AnalyticsETL
+    PostgreSQL --> ReconciliationJob
+    PostgreSQL --> DataArchiver
+
+    AnalyticsETL --> Redshift
+    AnalyticsETL --> S3Raw
+    DataArchiver --> S3Raw
+
+    %% Storage connections
+    FileUpload --> S3Media
+    S3Media --> CDN
+    PostgreSQL --> Redis
+    PostgreSQL --> OpenSearch
+
+    %% Consumption
+    PostgreSQL --> RESTApi
+    PostgreSQL --> GraphQL
+    Redshift --> QuickSight
+    Redshift --> Metabase
+    
+    RESTApi --> AdminDash
+    RESTApi --> ManagerDash
+    QuickSight --> OwnerDash
+
+    ReportGenerator --> PDFReport
+    ReportGenerator --> CSVExport
+    ReportGenerator --> ExcelExport
+
+    %% Data Flow Legend
+    OrderFlow -.-> OrderProcessor
+    InventoryFlow -.-> InventoryProcessor
+    FinancialFlow -.-> PaymentProcessor
+    CustomerFlow -.-> PostgreSQL
+    LocationFlow -.-> LocationProcessor

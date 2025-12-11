@@ -1,0 +1,105 @@
+flowchart TB
+    subgraph Request["Incoming Request"]
+        Client["Client Request<br/>GET /api/v1/orders"]
+    end
+
+    subgraph Gateway["API Gateway"]
+        WAF["WAF<br/>Security Rules"]
+        RateLimit["Rate Limiter<br/>100 req/min per tenant"]
+        LoadBalancer["Load Balancer<br/>Round Robin"]
+    end
+
+    subgraph Auth["Authentication Layer"]
+        JWTValidate["JWT Validation<br/>Verify Signature"]
+        TokenDecode["Token Decode<br/>Extract Claims"]
+        
+        JWTValidate -->|Invalid| Reject401["401 Unauthorized"]
+        JWTValidate -->|Valid| TokenDecode
+    end
+
+    subgraph Tenant["Tenant Resolution"]
+        DomainResolve["Domain Resolver<br/>Extract from Host header"]
+        TenantCache["Redis Cache<br/>domain → tenant_id"]
+        TenantDB["DB Lookup<br/>CORE_Tenant"]
+        TenantContext["Set Tenant Context<br/>app.tenant_id"]
+        
+        DomainResolve --> TenantCache
+        TenantCache -->|Miss| TenantDB
+        TenantDB --> TenantCache
+        TenantCache -->|Hit| TenantContext
+    end
+
+    subgraph RBAC["Authorization (FR-04)"]
+        RoleCheck["Role Check<br/>user.role vs endpoint"]
+        PermMatrix["Permission Matrix<br/>Admin > Manager > Waiter > Kitchen"]
+        
+        RoleCheck -->|Forbidden| Reject403["403 Forbidden"]
+        RoleCheck -->|Allowed| PermMatrix
+    end
+
+    subgraph Validation["Request Validation"]
+        SchemaValidate["JSON Schema<br/>Validation"]
+        BusinessRules["Business Rules<br/>Validation"]
+        
+        SchemaValidate -->|Invalid| Reject400["400 Bad Request"]
+        SchemaValidate -->|Valid| BusinessRules
+        BusinessRules -->|Invalid| Reject422["422 Unprocessable"]
+    end
+
+    subgraph Service["Service Layer"]
+        Controller["Controller<br/>Route Handler"]
+        ServiceLogic["Service<br/>Business Logic"]
+        Repository["Repository<br/>Data Access"]
+    end
+
+    subgraph Data["Data Layer"]
+        RLS["Row Level Security<br/>Tenant Isolation"]
+        Query["Query Execution<br/>PostgreSQL"]
+        Cache["Cache Check<br/>Redis"]
+        
+        Repository --> Cache
+        Cache -->|Miss| RLS
+        RLS --> Query
+        Query --> Cache
+    end
+
+    subgraph Response["Response"]
+        Transform["Response Transform<br/>DTO Mapping"]
+        Serialize["JSON Serialize"]
+        Compress["GZIP Compress"]
+        Send["Send Response"]
+    end
+
+    subgraph Logging["Observability"]
+        ReqLog["Request Logger"]
+        AuditLog["Audit Logger<br/>CORE_AuditLog"]
+        Metrics["Metrics<br/>Latency, Status"]
+        Tracing["Distributed Tracing<br/>X-Ray"]
+    end
+
+    %% Main Flow
+    Client --> WAF
+    WAF --> RateLimit
+    RateLimit --> LoadBalancer
+    LoadBalancer --> JWTValidate
+    TokenDecode --> DomainResolve
+    TenantContext --> RoleCheck
+    PermMatrix --> SchemaValidate
+    BusinessRules --> Controller
+    Controller --> ServiceLogic
+    ServiceLogic --> Repository
+    Cache --> Transform
+    Transform --> Serialize
+    Serialize --> Compress
+    Compress --> Send
+    Send --> Client
+
+    %% Logging connections
+    LoadBalancer -.-> ReqLog
+    ServiceLogic -.-> AuditLog
+    Send -.-> Metrics
+    Controller -.-> Tracing
+
+    %% Styling
+    classDef reject fill:#ffcccc,stroke:#ff0000
+    class Reject401,Reject403,Reject400,Reject422 reject

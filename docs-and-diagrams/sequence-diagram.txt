@@ -1,0 +1,29 @@
+sequenceDiagram
+    participant Waiter as POS (Frontend)
+    participant API as Django API
+    participant DB as Postgres (Primary)
+    participant Worker as Inventory Worker (Celery)
+    
+    Waiter->>API: POST /orders (Draft)
+    API->>DB: Save Order (Status: PENDING)
+    
+    Note over Waiter, DB: No stock deduction yet (Customer is still deciding)
+    
+    Waiter->>API: POST /orders/{id}/confirm
+    API->>DB: Update Order (Status: CONFIRMED)
+    API->>Worker: Dispatch "DeductStock" Task
+    
+    activate Worker
+    Worker->>DB: Fetch OrderItems
+    loop For Each Burger
+        DB->>Worker: Get Recipe (Bun x1, Meat x150g)
+        Worker->>DB: UPDATE Ingredient SET stock = stock - 1 WHERE id=Bun
+        Worker->>DB: UPDATE Ingredient SET stock = stock - 0.150 WHERE id=Meat
+        
+        alt Stock Level < Reorder Level
+            Worker->>API: Trigger LowStockNotification
+        end
+    end
+    deactivate Worker
+    
+    API-->>Waiter: Order Sent to Kitchen

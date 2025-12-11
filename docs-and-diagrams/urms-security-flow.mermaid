@@ -1,0 +1,140 @@
+flowchart TB
+    subgraph Threats["Threat Vectors"]
+        DDoS["DDoS Attack"]
+        SQLInject["SQL Injection"]
+        XSS["XSS Attack"]
+        CSRF["CSRF Attack"]
+        BruteForce["Brute Force"]
+        DataBreach["Data Breach"]
+        InsiderThreat["Insider Threat"]
+    end
+
+    subgraph EdgeSecurity["Edge Security"]
+        CloudFlare["CloudFlare<br/>DDoS Protection"]
+        WAF["AWS WAF<br/>Web Application Firewall"]
+        GeoBlock["Geo-blocking<br/>Country Restrictions"]
+        RateLimit["Rate Limiting<br/>100 req/min/tenant"]
+    end
+
+    subgraph NetworkSecurity["Network Security"]
+        VPC["VPC Isolation"]
+        SecurityGroups["Security Groups<br/>Firewall Rules"]
+        NACL["Network ACLs"]
+        PrivateSubnet["Private Subnets<br/>No Public Access"]
+        VPNAccess["VPN Access<br/>Admin Only"]
+    end
+
+    subgraph AppSecurity["Application Security"]
+        subgraph Authentication["Authentication"]
+            OAuth2["OAuth 2.0 + OIDC"]
+            MFA["Multi-Factor Auth"]
+            JWTValidation["JWT Validation<br/>RS256"]
+            SessionMgmt["Session Management<br/>Redis + Secure Cookies"]
+        end
+
+        subgraph Authorization["Authorization"]
+            RBAC["Role-Based Access<br/>FR-04"]
+            TenantIsolation["Tenant Isolation<br/>FR-01, FR-05"]
+            RLS["Row Level Security<br/>PostgreSQL"]
+            APIScope["API Scopes<br/>Resource-level"]
+        end
+
+        subgraph InputValidation["Input Validation"]
+            SchemaValidation["JSON Schema<br/>Validation"]
+            Sanitization["Input Sanitization<br/>XSS Prevention"]
+            ParamValidation["Parameter<br/>Validation"]
+            FileValidation["File Upload<br/>Validation"]
+        end
+
+        subgraph OutputSecurity["Output Security"]
+            CSP["Content Security<br/>Policy"]
+            CORS["CORS<br/>Configuration"]
+            SecureHeaders["Security Headers<br/>HSTS, X-Frame"]
+            ResponseSanitize["Response<br/>Sanitization"]
+        end
+    end
+
+    subgraph DataSecurity["Data Security"]
+        subgraph Encryption["Encryption"]
+            TLS["TLS 1.3<br/>In Transit"]
+            AES256["AES-256<br/>At Rest"]
+            KMS["AWS KMS<br/>Key Management"]
+            FieldEncrypt["Field-level<br/>Encryption"]
+        end
+
+        subgraph DataProtection["Data Protection"]
+            PII["PII Masking"]
+            Tokenization["Card Tokenization<br/>Stripe"]
+            Anonymization["Data Anonymization<br/>Analytics"]
+            Retention["Data Retention<br/>Policies"]
+        end
+
+        subgraph Backup["Backup & Recovery"]
+            AutoBackup["Automated Backups<br/>Daily"]
+            PointInTime["Point-in-Time<br/>Recovery"]
+            CrossRegion["Cross-Region<br/>Replication"]
+            EncryptedBackup["Encrypted Backups<br/>S3 SSE"]
+        end
+    end
+
+    subgraph AuditCompliance["Audit & Compliance"]
+        subgraph Logging["Logging"]
+            AuditLog["Audit Logs<br/>CORE_AuditLog"]
+            AccessLog["Access Logs<br/>CloudWatch"]
+            SecurityLog["Security Events<br/>GuardDuty"]
+            ChangeLog["Change Tracking<br/>All Mutations"]
+        end
+
+        subgraph Monitoring["Monitoring"]
+            SIEM["SIEM Integration"]
+            Alerting["Real-time Alerts"]
+            AnomalyDetect["Anomaly Detection"]
+            ThreatIntel["Threat Intelligence"]
+        end
+
+        subgraph Compliance["Compliance"]
+            GDPR["GDPR<br/>Data Privacy"]
+            PCI["PCI-DSS<br/>Payment Security"]
+            SOC2["SOC 2<br/>Security Controls"]
+            FiscalComp["Fiscal Compliance<br/>FR-27"]
+        end
+    end
+
+    subgraph IncidentResponse["Incident Response"]
+        Detection["Threat Detection"]
+        Containment["Containment"]
+        Eradication["Eradication"]
+        Recovery["Recovery"]
+        PostMortem["Post-Mortem"]
+    end
+
+    %% Threat Mitigation
+    DDoS --> CloudFlare
+    SQLInject --> WAF
+    XSS --> InputValidation
+    CSRF --> SessionMgmt
+    BruteForce --> RateLimit
+    DataBreach --> DataSecurity
+    InsiderThreat --> AuditCompliance
+
+    %% Security Flow
+    CloudFlare --> WAF
+    WAF --> GeoBlock
+    GeoBlock --> RateLimit
+    
+    RateLimit --> VPC
+    VPC --> SecurityGroups
+    SecurityGroups --> PrivateSubnet
+    
+    PrivateSubnet --> Authentication
+    Authentication --> Authorization
+    Authorization --> InputValidation
+    InputValidation --> OutputSecurity
+    
+    OutputSecurity --> Encryption
+    Encryption --> DataProtection
+    DataProtection --> Backup
+    
+    %% All to Audit
+    Authentication -.-> AuditLog
+    

@@ -1,0 +1,106 @@
+flowchart TB
+    subgraph Foundation["Foundation Layer"]
+        Core["🏢 Core Module<br/>Tenant, User, Auth"]
+        Notification["🔔 Notification Module<br/>Alerts, Push, Email"]
+        Audit["📋 Audit Module<br/>Logging, Compliance"]
+    end
+
+    subgraph Catalog["Catalog Layer"]
+        Menu["🍽️ Menu Module<br/>Items, Categories, Modifiers"]
+        CMS["📄 CMS Module<br/>Pages, Content"]
+    end
+
+    subgraph Operations["Operations Layer"]
+        Inventory["📦 Inventory Module<br/>Stock, Recipes, Suppliers"]
+        Reservation["📅 Reservation Module<br/>Tables, Bookings"]
+        HRM["👥 HRM Module<br/>Shifts, Time-off"]
+    end
+
+    subgraph Transaction["Transaction Layer"]
+        Order["🛒 Order Module<br/>Orders, Items, Kitchen"]
+        Payment["💳 Payment Module<br/>Transactions, Fiscal"]
+        Loyalty["⭐ Loyalty Module<br/>Points, Promotions"]
+    end
+
+    subgraph Fulfillment["Fulfillment Layer"]
+        Delivery["🚚 Delivery Module<br/>Zones, Drivers, Shipments"]
+        CRM["👤 CRM Module<br/>Customers, Addresses"]
+    end
+
+    subgraph Analytics["Analytics Layer"]
+        Reports["📊 Reports Module<br/>Sales, Inventory, Staff"]
+        Dashboard["📈 Dashboard Module<br/>KPIs, Real-time"]
+    end
+
+    %% Foundation Dependencies (everything depends on these)
+    Core --> Menu
+    Core --> Inventory
+    Core --> Reservation
+    Core --> Order
+    Core --> HRM
+    Core --> CMS
+    Core --> Delivery
+    Core --> CRM
+    
+    Notification --> Order
+    Notification --> Reservation
+    Notification --> Inventory
+    Notification --> Delivery
+    
+    Audit --> Core
+    Audit --> Order
+    Audit --> Payment
+    Audit --> Inventory
+
+    %% Catalog Dependencies
+    Menu --> Order
+    Menu --> Inventory
+    Menu --> CMS
+
+    %% Operations Dependencies
+    Inventory --> Order
+    Inventory --> Reports
+    
+    Reservation --> Order
+    Reservation --> CRM
+    
+    HRM --> Reports
+
+    %% Transaction Dependencies
+    Order --> Payment
+    Order --> Delivery
+    Order --> Loyalty
+    Order --> Reports
+    
+    Payment --> Reports
+    Payment --> Loyalty
+    
+    Loyalty --> CRM
+
+    %% Fulfillment Dependencies
+    Delivery --> CRM
+    
+    CRM --> Order
+    CRM --> Reservation
+    CRM --> Loyalty
+
+    %% Analytics Dependencies
+    Reports --> Dashboard
+    Order --> Dashboard
+    Inventory --> Dashboard
+    Payment --> Dashboard
+
+    %% Styling
+    classDef foundation fill:#e3f2fd,stroke:#1976d2
+    classDef catalog fill:#fff3e0,stroke:#f57c00
+    classDef operations fill:#e8f5e9,stroke:#388e3c
+    classDef transaction fill:#fce4ec,stroke:#c2185b
+    classDef fulfillment fill:#f3e5f5,stroke:#7b1fa2
+    classDef analytics fill:#e0f7fa,stroke:#00838f
+
+    class Core,Notification,Audit foundation
+    class Menu,CMS catalog
+    class Inventory,Reservation,HRM operations
+    class Order,Payment,Loyalty transaction
+    class Delivery,CRM fulfillment
+    class Reports,Dashboard analytics

@@ -1,0 +1,167 @@
+flowchart TB
+    subgraph ClientLayer["Client Layer"]
+        WebApp["🌐 Web Application<br/>(React/Next.js)"]
+        MobileApp["📱 Mobile App<br/>(React Native)"]
+        POS["💳 POS Terminal<br/>(Electron)"]
+        KDS["🍳 Kitchen Display<br/>(React)"]
+        DriverApp["🚗 Driver App<br/>(React Native)"]
+    end
+
+    subgraph CDN["Content Delivery"]
+        CloudFront["☁️ CloudFront CDN"]
+        S3Media["📦 S3 Media Bucket"]
+    end
+
+    subgraph Gateway["API Gateway Layer"]
+        ALB["⚖️ Application Load Balancer"]
+        WAF["🛡️ AWS WAF"]
+        RateLimit["🚦 Rate Limiter"]
+    end
+
+    subgraph AuthLayer["Authentication Layer"]
+        Auth0["🔐 Auth0 / Cognito"]
+        JWT["🎫 JWT Validator"]
+        RBAC["👤 RBAC Middleware"]
+    end
+
+    subgraph APILayer["API Layer (Node.js/NestJS)"]
+        TenantResolver["🏢 Tenant Resolver"]
+        
+        subgraph CoreAPI["Core Services"]
+            AuthAPI["Auth Service"]
+            UserAPI["User Service"]
+            NotificationAPI["Notification Service"]
+        end
+        
+        subgraph BusinessAPI["Business Services"]
+            MenuAPI["Menu Service"]
+            OrderAPI["Order Service"]
+            InventoryAPI["Inventory Service"]
+            ReservationAPI["Reservation Service"]
+            CRMAPI["CRM Service"]
+        end
+        
+        subgraph OperationsAPI["Operations Services"]
+            POSAPI["POS Service"]
+            KDSAPI["KDS Service"]
+            DeliveryAPI["Delivery Service"]
+            HRMAPI["HRM Service"]
+        end
+        
+        subgraph IntegrationAPI["Integration Services"]
+            PaymentAPI["Payment Gateway"]
+            FiscalAPI["Fiscal Service"]
+            SMSAPI["SMS/Email Service"]
+            GeoAPI["Geocoding Service"]
+        end
+    end
+
+    subgraph MessageQueue["Message Queue Layer"]
+        SQS["📬 AWS SQS"]
+        EventBridge["🔔 EventBridge"]
+        
+        subgraph Workers["Background Workers"]
+            StockWorker["📊 Stock Alert Worker"]
+            ReservationWorker["📅 Reservation Worker"]
+            ReportWorker["📈 Report Generator"]
+            NotificationWorker["📧 Notification Worker"]
+        end
+    end
+
+    subgraph DataLayer["Data Layer"]
+        subgraph Primary["Primary Database"]
+            PostgreSQL[("🐘 PostgreSQL 15<br/>+ PostGIS")]
+        end
+        
+        subgraph Cache["Cache Layer"]
+            Redis[("⚡ Redis Cluster")]
+            ElastiCache["Session Store"]
+        end
+        
+        subgraph Search["Search Engine"]
+            OpenSearch["🔍 OpenSearch"]
+        end
+        
+        subgraph Analytics["Analytics"]
+            Redshift[("📊 Redshift")]
+            QuickSight["📈 QuickSight"]
+        end
+    end
+
+    subgraph External["External Services"]
+        Stripe["💳 Stripe"]
+        Twilio["📱 Twilio"]
+        SendGrid["📧 SendGrid"]
+        GoogleMaps["🗺️ Google Maps"]
+        Firebase["🔥 Firebase<br/>(Push Notifications)"]
+    end
+
+    subgraph Monitoring["Observability"]
+        CloudWatch["📊 CloudWatch"]
+        XRay["🔬 X-Ray Tracing"]
+        Sentry["🐛 Sentry"]
+        DataDog["📈 DataDog"]
+    end
+
+    %% Client connections
+    WebApp --> CloudFront
+    MobileApp --> ALB
+    POS --> ALB
+    KDS --> ALB
+    DriverApp --> ALB
+    
+    CloudFront --> S3Media
+    CloudFront --> ALB
+    
+    %% Gateway flow
+    ALB --> WAF
+    WAF --> RateLimit
+    RateLimit --> Auth0
+    
+    %% Auth flow
+    Auth0 --> JWT
+    JWT --> RBAC
+    RBAC --> TenantResolver
+    
+    %% API routing
+    TenantResolver --> CoreAPI
+    TenantResolver --> BusinessAPI
+    TenantResolver --> OperationsAPI
+    TenantResolver --> IntegrationAPI
+    
+    %% Data connections
+    CoreAPI --> PostgreSQL
+    BusinessAPI --> PostgreSQL
+    OperationsAPI --> PostgreSQL
+    IntegrationAPI --> PostgreSQL
+    
+    CoreAPI --> Redis
+    BusinessAPI --> Redis
+    OperationsAPI --> Redis
+    
+    BusinessAPI --> OpenSearch
+    
+    %% Queue connections
+    BusinessAPI --> SQS
+    OperationsAPI --> SQS
+    SQS --> Workers
+    Workers --> PostgreSQL
+    
+    EventBridge --> Workers
+    
+    %% External integrations
+    PaymentAPI --> Stripe
+    SMSAPI --> Twilio
+    SMSAPI --> SendGrid
+    GeoAPI --> GoogleMaps
+    NotificationAPI --> Firebase
+    
+    %% Analytics pipeline
+    PostgreSQL -.-> Redshift
+    Redshift --> QuickSight
+    
+    %% Monitoring
+    APILayer --> CloudWatch
+    APILayer --> XRay
+    APILayer --> Sentry
+    DataLayer --> DataDog

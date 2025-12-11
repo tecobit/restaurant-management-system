@@ -1,0 +1,221 @@
+erDiagram
+    %% ==========================================
+    %% 1. CORE & AUTH MODULE (Users & Tenants)
+    %% ==========================================
+    CORE_Tenant {
+        uuid id PK
+        string name
+        string domain
+        json settings "Logo, Colors, TaxRate"
+    }
+    CORE_User {
+        uuid id PK
+        uuid tenant_id FK
+        string email
+        string password_hash
+        string role "Admin, Manager, Waiter, Kitchen"
+    }
+
+    %% ==========================================
+    %% 2. MENU MODULE (The Catalog)
+    %% ==========================================
+    MENU_Category {
+        uuid id PK
+        string name
+        int sort_order
+    }
+    MENU_Item {
+        uuid id PK
+        uuid category_id FK
+        string name
+        decimal price
+        boolean is_available
+        json taxes
+    }
+    MENU_ModifierGroup {
+        uuid id PK
+        string name "e.g. Steak Temperature"
+        int min_selection
+        int max_selection
+    }
+    MENU_Modifier {
+        uuid id PK
+        uuid group_id FK
+        string name "e.g. Medium Rare"
+        decimal price_adjustment
+    }
+    %% Relationship: Many Items can have Many Modifier Groups
+    MENU_Item_ModifierGroup_Link {
+        uuid item_id FK
+        uuid group_id FK
+    }
+
+    %% ==========================================
+    %% 3. INVENTORY MODULE (The Recipe Engine)
+    %% ==========================================
+    INV_Supplier {
+        uuid id PK
+        string name
+        string contact_info
+    }
+    INV_Ingredient {
+        uuid id PK
+        uuid supplier_id FK
+        string name
+        string unit "kg, ltr, pcs"
+        decimal current_stock
+        decimal reorder_level
+        decimal cost_per_unit
+    }
+    INV_Recipe {
+        uuid id PK
+        uuid menu_item_id FK "Links Menu to Inventory"
+        string instruction_text
+    }
+    INV_RecipeItem {
+        uuid id PK
+        uuid recipe_id FK
+        uuid ingredient_id FK
+        decimal quantity_needed
+        string unit "g, ml (conversion happens here)"
+    }
+    INV_StockLog {
+        uuid id PK
+        uuid ingredient_id FK
+        string action "DEDUCT_SALE, RESTOCK, WASTE"
+        decimal quantity_change
+        timestamp created_at
+    }
+
+    %% ==========================================
+    %% 4. POS & ORDER MODULE (The Transaction)
+    %% ==========================================
+    POS_Order {
+        uuid id PK
+        uuid table_id FK
+        uuid staff_id FK
+        uuid customer_id FK "Optional"
+        string status "DRAFT, KITCHEN, READY, PAID, VOID"
+        string order_type "DINE_IN, TAKEOUT, DELIVERY"
+        timestamp created_at
+    }
+    POS_OrderItem {
+        uuid id PK
+        uuid order_id FK
+        uuid menu_item_id FK
+        int quantity
+        decimal unit_price
+        json active_modifiers "Snapshot of choices"
+        string status "QUEUED, COOKING, SERVED"
+    }
+    POS_Transaction {
+        uuid id PK
+        uuid order_id FK
+        decimal amount
+        string method "CASH, CARD, QR"
+        string gateway_ref
+    }
+    POS_FiscalReceipt {
+        uuid id PK
+        uuid transaction_id FK
+        string fiscal_signature "Govt HASH"
+        json raw_data_snapshot
+    }
+
+    %% ==========================================
+    %% 5. BOOKINGS & TABLES (Physical Space)
+    %% ==========================================
+    RES_FloorPlan {
+        uuid id PK
+        string name "Main Hall, Patio"
+    }
+    RES_Table {
+        uuid id PK
+        uuid floor_id FK
+        string table_number
+        int seat_capacity
+        int x_coord
+        int y_coord
+    }
+    RES_Reservation {
+        uuid id PK
+        uuid table_id FK
+        uuid customer_id FK
+        timestamp start_time
+        timestamp end_time
+        int party_size
+        string status "CONFIRMED, SEATED, NO_SHOW"
+    }
+
+    %% ==========================================
+    %% 6. LOGISTICS (Delivery)
+    %% ==========================================
+    LOG_DeliveryZone {
+        uuid id PK
+        string name
+        geometry polygon "PostGIS Data"
+        decimal delivery_fee
+    }
+    LOG_Driver {
+        uuid id PK
+        uuid user_id FK
+        string current_lat
+        string current_long
+        string status "IDLE, ON_JOB"
+    }
+    LOG_Shipment {
+        uuid id PK
+        uuid order_id FK
+        uuid driver_id FK
+        timestamp picked_up_at
+        timestamp delivered_at
+        string proof_photo_url
+    }
+
+    %% ==========================================
+    %% 7. HRM (Staff)
+    %% ==========================================
+    HRM_Shift {
+        uuid id PK
+        uuid user_id FK
+        timestamp scheduled_start
+        timestamp scheduled_end
+        timestamp actual_clock_in
+        timestamp actual_clock_out
+    }
+
+    %% ==========================================
+    %% 8. CMS (Website Builder)
+    %% ==========================================
+    CMS_Page {
+        uuid id PK
+        string slug "e.g. /about-us"
+        string title
+        json content_blocks "TanStack Render Data"
+    }
+
+    %% RELATIONS
+    CORE_Tenant ||--o{ CORE_User : has
+    MENU_Category ||--o{ MENU_Item : contains
+    MENU_Item ||--o{ MENU_Item_ModifierGroup_Link : has
+    MENU_ModifierGroup ||--o{ MENU_Item_ModifierGroup_Link : belongs_to
+    MENU_ModifierGroup ||--o{ MENU_Modifier : contains
+    
+    MENU_Item ||--|| INV_Recipe : defines_cost
+    INV_Recipe ||--|{ INV_RecipeItem : requires
+    INV_RecipeItem }|--|| INV_Ingredient : uses
+    INV_Ingredient ||--o{ INV_StockLog : tracks
+
+    RES_FloorPlan ||--o{ RES_Table : houses
+    RES_Table ||--o{ POS_Order : hosts
+    RES_Table ||--o{ RES_Reservation : booked_for
+
+    POS_Order ||--|{ POS_OrderItem : contains
+    POS_Order ||--o{ POS_Transaction : paid_by
+    POS_Transaction ||--|| POS_FiscalReceipt : fiscalized
+    
+    POS_Order ||--|| LOG_Shipment : requires_delivery
+    LOG_Shipment }|--|| LOG_Driver : assigned_to
+
+    CORE_User ||--o{ POS_Order : created_by
+    CORE_User ||--o{ HRM_Shift : works

@@ -1,0 +1,129 @@
+sequenceDiagram
+    autonumber
+    participant M as Manager
+    participant UI as Admin Dashboard
+    participant API as Inventory Service
+    participant DB as PostgreSQL
+    participant Q as Message Queue
+    participant W as Stock Alert Worker
+    participant N as Notification Service
+    participant S as Supplier
+
+    rect rgb(240, 248, 255)
+        Note over M,DB: Flow 1: Manual Stock Take (Audit)
+        M->>UI: Open Stock Take
+        UI->>API: GET /ingredients
+        API->>DB: Query All Ingredients
+        API-->>UI: Ingredient List + Current Stock
+        
+        M->>UI: Enter Physical Counts
+        UI->>API: POST /stock-take
+        
+        loop For Each Ingredient
+            API->>DB: Compare physical vs system
+            alt Discrepancy Found
+                API->>DB: Insert INV_StockLog (AUDIT)
+                Note right of DB: FR-19: Immutable log<br/>FR-20: action = AUDIT
+                API->>DB: Update current_stock
+            end
+        end
+        
+        API-->>UI: Stock Take Complete
+        UI-->>M: Show Discrepancy Report
+    end
+
+    rect rgb(255, 250, 240)
+        Note over W,S: Flow 2: Low Stock Alert (Background)
+        Note over W: Scheduled: Every 15 minutes
+        W->>DB: Query Low Stock Ingredients
+        Note right of DB: WHERE current_stock < reorder_level<br/>(FR-16)
+        DB-->>W: Low Stock Items
+        
+        loop For Each Low Stock Item
+            W->>DB: Check if alert already sent today
+            alt No Recent Alert
+                W->>DB: Insert CORE_Notification
+                W->>N: Send Alert
+                N-->>M: 🔔 "Tomato Sauce is low (5kg remaining)"
+                N-->>M: 📧 Email Alert
+            end
+        end
+    end
+
+    rect rgb(240, 255, 240)
+        Note over M,DB: Flow 3: Create Purchase Order
+        M->>UI: Create Purchase Order
+        UI->>API: GET /ingredients?low_stock=true
+        API->>DB: Query Low Stock + Suppliers
+        API-->>UI: Suggested Order Items
+        
+        M->>UI: Adjust Quantities, Select Supplier
+        UI->>API: POST /purchase-orders
+        API->>DB: Insert INV_PurchaseOrder (DRAFT)
+        API->>DB: Insert INV_PurchaseOrderItems
+        API-->>UI: PO Created (PO-2024-001)
+        
+        M->>UI: Send to Supplier
+        UI->>API: PATCH /purchase-orders/{id}/send
+        API->>DB: Update status = SENT
+        API->>N: Generate PO PDF
+        API->>N: Email to Supplier
+        N-->>S: 📧 Purchase Order PDF
+        API-->>UI: PO Sent Successfully
+    end
+
+    rect rgb(255, 245, 238)
+        Note over M,DB: Flow 4: Receive Stock Delivery
+        S-->>M: Delivery Arrives
+        M->>UI: Open PO for Receiving
+        UI->>API: GET /purchase-orders/{id}
+        API-->>UI: PO Details + Expected Items
+        
+        M->>UI: Enter Received Quantities
+        UI->>API: POST /purchase-orders/{id}/receive
+        
+        loop For Each Item Received
+            API->>DB: Insert INV_StockLog (RESTOCK)
+            Note right of DB: FR-19: Immutable<br/>FR-20: action = RESTOCK
+            API->>DB: Update INV_Ingredient.current_stock
+            API->>DB: Update cost_per_unit (if changed)
+            API->>DB: Update last_restocked_at
+            API->>DB: Update PO_Item.quantity_received
+        end
+        
+        API->>DB: Update PO status = RECEIVED
+        API->>DB: Update received_at
+        API-->>UI: Stock Received
+        UI-->>M: Show Receipt Summary
+    end
+
+    rect rgb(255, 240, 245)
+        Note over M,DB: Flow 5: Record Waste
+        M->>UI: Record Waste Entry
+        UI->>API: POST /waste
+        API->>DB: Begin Transaction
+        API->>DB: Insert INV_StockLog (WASTE)
+        Note right of DB: FR-20: action = WASTE
+        API->>DB: Decrement current_stock
+        API->>DB: Commit Transaction
+        API-->>UI: Waste Recorded
+        UI-->>M: Confirmation
+        
+        Note over API: Waste Report Generated<br/>for Cost Analysis
+    end
+
+    rect rgb(245, 245, 255)
+        Note over API,DB: Flow 6: Recipe Cost Calculation (FR-17)
+        M->>UI: View Menu Item Cost
+        UI->>API: GET /menu-items/{id}/cost
+        API->>DB: Get Recipe + RecipeItems
+        API->>DB: Get Ingredient Costs
+        
+        API->>API: Calculate Theoretical Cost
+        Note right of API: Σ(quantity_needed × cost_per_unit)
+        
+        API->>DB: Update INV_Recipe.theoretical_cost
+        API-->>UI: Cost Breakdown
+        UI-->>M: Show Cost vs Selling Price
+        Note over M: Food Cost % = (Cost / Price) × 100
+    end

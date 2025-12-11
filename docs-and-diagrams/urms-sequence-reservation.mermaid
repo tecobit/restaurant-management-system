@@ -1,0 +1,100 @@
+sequenceDiagram
+    autonumber
+    participant C as Customer
+    participant Web as Website/App
+    participant API as Reservation Service
+    participant DB as PostgreSQL
+    participant Q as Message Queue
+    participant N as Notification Service
+    participant SMS as Twilio
+    participant Staff as Host/Staff
+
+    rect rgb(240, 248, 255)
+        Note over C,DB: Phase 1: Availability Check
+        C->>Web: Select Date, Time, Party Size
+        Web->>API: GET /tables/availability?date&time&party_size
+        API->>DB: Query available tables
+        Note right of DB: Check seat_capacity >= party_size<br/>Check no conflicting reservations<br/>(FR-30 conflict detection)
+        DB-->>API: Available Tables List
+        API-->>Web: Show Available Slots
+        Web-->>C: Display Options
+    end
+
+    rect rgb(255, 250, 240)
+        Note over C,SMS: Phase 2: Reservation Creation
+        C->>Web: Select Table & Confirm
+        Web->>API: POST /reservations
+        API->>DB: Begin Transaction
+        API->>DB: Check Conflict (Trigger FR-30)
+        
+        alt Conflict Exists
+            DB-->>API: Raise Exception
+            API-->>Web: 409 Conflict Error
+            Web-->>C: "Slot no longer available"
+        else No Conflict
+            API->>DB: Insert RES_Reservation (PENDING)
+            API->>DB: Generate Confirmation Code
+            API->>DB: Commit Transaction
+            API->>Q: Publish ReservationCreated
+            Q->>N: Send Confirmation
+            N->>SMS: SMS Confirmation
+            SMS-->>C: "Reservation Confirmed #ABC123"
+            API-->>Web: Reservation Created
+            Web-->>C: Show Confirmation
+        end
+    end
+
+    rect rgb(240, 255, 240)
+        Note over Q,SMS: Phase 3: Reminder (Background Job)
+        Note over Q: Scheduled Job: 2 hours before
+        Q->>API: Check Upcoming Reservations
+        API->>DB: Query reservations (start_time - 2hrs)
+        DB-->>API: Reservations to Remind
+        
+        loop For Each Reservation
+            API->>N: Send Reminder
+            N->>SMS: SMS Reminder
+            SMS-->>C: "Reminder: Table for 4 at 7PM"
+            API->>DB: Update reminded_at
+        end
+    end
+
+    rect rgb(255, 245, 238)
+        Note over Staff,DB: Phase 4: Guest Arrival
+        Staff->>API: GET /reservations?date=today
+        API->>DB: Query Today's Reservations
+        API-->>Staff: Reservation List
+        
+        C->>Staff: Arrive at Restaurant
+        Staff->>API: PATCH /reservations/{id}/seat
+        API->>DB: Update status = SEATED
+        API->>DB: Create POS_Order linked to table
+        API-->>Staff: Table Ready, Order Created
+    end
+
+    rect rgb(255, 240, 245)
+        Note over Q,DB: Phase 5: No-Show Handling (Background Job)
+        Note over Q: Scheduled Job: Every 5 minutes
+        Q->>API: Check Overdue Reservations
+        API->>DB: Query: status=CONFIRMED AND<br/>start_time + grace_period < NOW()
+        DB-->>API: Overdue Reservations
+        
+        loop For Each Overdue
+            API->>DB: Update status = NO_SHOW
+            API->>Q: Publish NoShowEvent
+            Q->>N: Notify Staff
+            Q->>DB: Update Customer no_show_count
+        end
+    end
+
+    rect rgb(245, 245, 255)
+        Note over C,DB: Phase 6: Cancellation Flow
+        C->>Web: Cancel Reservation
+        Web->>API: PATCH /reservations/{id}/cancel
+        API->>DB: Update status = CANCELLED
+        API->>Q: Publish ReservationCancelled
+        Q->>N: Send Cancellation Confirmation
+        N->>SMS: SMS Cancellation
+        API-->>Web: Cancellation Confirmed
+        Web-->>C: "Your reservation has been cancelled"
+    end

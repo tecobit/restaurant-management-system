@@ -1,0 +1,132 @@
+flowchart LR
+    subgraph Development["Development"]
+        Dev["👨‍💻 Developer"]
+        LocalTest["Local Testing<br/>Docker Compose"]
+        PR["Pull Request"]
+    end
+
+    subgraph SourceControl["Source Control"]
+        GitHub["GitHub<br/>Repository"]
+        BranchProtect["Branch Protection<br/>Rules"]
+    end
+
+    subgraph CI["Continuous Integration"]
+        subgraph Triggers["Triggers"]
+            PRTrigger["PR Opened/Updated"]
+            MergeTrigger["Merge to Main"]
+            TagTrigger["Release Tag"]
+        end
+
+        subgraph Build["Build Stage"]
+            Checkout["Checkout Code"]
+            Install["Install Dependencies"]
+            Lint["ESLint + Prettier"]
+            TypeCheck["TypeScript Check"]
+            UnitTest["Unit Tests<br/>Jest"]
+            IntegrationTest["Integration Tests<br/>Supertest"]
+            Coverage["Code Coverage<br/>Istanbul"]
+        end
+
+        subgraph Security["Security Scan"]
+            SAST["SAST<br/>SonarQube"]
+            DepCheck["Dependency Check<br/>npm audit"]
+            SecretScan["Secret Scanner<br/>GitLeaks"]
+            ContainerScan["Container Scan<br/>Trivy"]
+        end
+
+        subgraph Artifact["Artifact Build"]
+            DockerBuild["Docker Build"]
+            DockerPush["Push to ECR"]
+            DBMigration["Generate<br/>DB Migration"]
+        end
+    end
+
+    subgraph CD["Continuous Deployment"]
+        subgraph Staging["Staging Environment"]
+            StageDeploy["Deploy to ECS<br/>Staging"]
+            StageMigrate["Run Migrations"]
+            SmokeTest["Smoke Tests"]
+            E2ETest["E2E Tests<br/>Playwright"]
+            PerfTest["Performance Test<br/>k6"]
+        end
+
+        subgraph Approval["Approval Gate"]
+            ManualApproval["Manual Approval<br/>Required"]
+            AutoApprove["Auto-Approve<br/>(Hotfix)"]
+        end
+
+        subgraph Production["Production Environment"]
+            BlueGreen["Blue/Green<br/>Deployment"]
+            ProdMigrate["Run Migrations"]
+            HealthCheck["Health Checks"]
+            Canary["Canary Release<br/>10% → 50% → 100%"]
+            Rollback["Auto-Rollback<br/>on Error"]
+        end
+    end
+
+    subgraph PostDeploy["Post-Deployment"]
+        Notify["Slack<br/>Notification"]
+        Changelog["Generate<br/>Changelog"]
+        Docs["Update<br/>API Docs"]
+        Monitor["Enhanced<br/>Monitoring"]
+    end
+
+    %% Development Flow
+    Dev --> LocalTest
+    LocalTest --> PR
+    PR --> GitHub
+    GitHub --> BranchProtect
+
+    %% CI Flow
+    PRTrigger --> Checkout
+    MergeTrigger --> Checkout
+    TagTrigger --> Checkout
+    
+    Checkout --> Install
+    Install --> Lint
+    Lint --> TypeCheck
+    TypeCheck --> UnitTest
+    UnitTest --> IntegrationTest
+    IntegrationTest --> Coverage
+
+    Coverage --> SAST
+    SAST --> DepCheck
+    DepCheck --> SecretScan
+    SecretScan --> ContainerScan
+
+    ContainerScan --> DockerBuild
+    DockerBuild --> DockerPush
+    DockerPush --> DBMigration
+
+    %% CD Flow
+    DBMigration --> StageDeploy
+    StageDeploy --> StageMigrate
+    StageMigrate --> SmokeTest
+    SmokeTest --> E2ETest
+    E2ETest --> PerfTest
+
+    PerfTest --> ManualApproval
+    PerfTest --> AutoApprove
+
+    ManualApproval --> BlueGreen
+    AutoApprove --> BlueGreen
+
+    BlueGreen --> ProdMigrate
+    ProdMigrate --> HealthCheck
+    HealthCheck --> Canary
+    Canary --> Rollback
+
+    %% Post Deploy
+    Canary --> Notify
+    Notify --> Changelog
+    Changelog --> Docs
+    Docs --> Monitor
+
+    %% Styling
+    classDef dev fill:#e1f5fe
+    classDef ci fill:#fff3e0
+    classDef cd fill:#e8f5e9
+    classDef security fill:#ffebee
+    
+    class Dev,LocalTest,PR dev
+    class SAST,DepCheck,SecretScan,ContainerScan security

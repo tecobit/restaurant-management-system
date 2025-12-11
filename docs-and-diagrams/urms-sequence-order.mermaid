@@ -1,0 +1,90 @@
+sequenceDiagram
+    autonumber
+    participant W as Waiter/POS
+    participant API as Order Service
+    participant INV as Inventory Service
+    participant DB as PostgreSQL
+    participant KDS as Kitchen Display
+    participant Q as Message Queue
+    participant N as Notification Service
+    participant P as Payment Gateway
+    participant F as Fiscal Service
+
+    rect rgb(240, 248, 255)
+        Note over W,DB: Phase 1: Order Creation
+        W->>API: POST /orders (items, table_id)
+        API->>DB: Begin Transaction
+        API->>DB: Insert POS_Order (DRAFT)
+        API->>DB: Insert POS_OrderItems
+        API->>DB: Commit Transaction
+        API-->>W: Order Created (order_id)
+    end
+
+    rect rgb(255, 250, 240)
+        Note over W,KDS: Phase 2: Order Confirmation
+        W->>API: PATCH /orders/{id}/confirm
+        API->>DB: Begin Transaction
+        API->>DB: Update status = CONFIRMED
+        
+        loop For Each Order Item
+            API->>INV: Deduct Inventory
+            INV->>DB: Get Recipe for Item
+            INV->>DB: Calculate Ingredients
+            INV->>DB: Insert INV_StockLog (DEDUCT_SALE)
+            INV->>DB: Update INV_Ingredient.current_stock
+            INV->>Q: Check Low Stock Alert
+        end
+        
+        API->>DB: Update status = KITCHEN
+        API->>DB: Commit Transaction
+        API->>KDS: WebSocket: New Order
+        KDS-->>KDS: Display Order Items
+        API-->>W: Order Confirmed
+    end
+
+    rect rgb(240, 255, 240)
+        Note over KDS,API: Phase 3: Kitchen Processing
+        loop For Each Item
+            KDS->>API: PATCH /order-items/{id}/status
+            API->>DB: Update item status = COOKING
+            API->>W: WebSocket: Item Cooking
+        end
+        
+        KDS->>API: PATCH /order-items/{id}/status
+        API->>DB: Update item status = DONE
+        API->>DB: Check if ALL items DONE
+        API->>DB: Update order status = READY
+        API->>W: WebSocket: Order Ready
+        API->>Q: Publish OrderReady Event
+    end
+
+    rect rgb(255, 240, 245)
+        Note over W,F: Phase 4: Payment & Fiscalization
+        W->>API: POST /orders/{id}/transactions
+        API->>P: Process Payment
+        P-->>API: Payment Success
+        API->>DB: Insert POS_Transaction
+        API->>DB: Update order status = PAID
+        
+        API->>F: Generate Fiscal Receipt
+        F->>DB: Get Previous Receipt Hash
+        F->>F: Calculate SHA-256 Hash
+        F->>DB: Insert POS_FiscalReceipt
+        F-->>API: Fiscal Receipt Generated
+        
+        API->>Q: Publish OrderPaid Event
+        Q->>N: Trigger Notifications
+        N->>DB: Update Customer Loyalty Points
+        
+        API-->>W: Payment Complete + Receipt
+    end
+
+    rect rgb(245, 245, 255)
+        Note over API,DB: Phase 5: Order Completion
+        W->>API: PATCH /orders/{id}/complete
+        API->>DB: Update status = COMPLETED
+        API->>DB: Update completed_at timestamp
+        API->>Q: Publish OrderCompleted Event
+        Q->>DB: Update Customer Stats (visit_count, total_spent)
+        API-->>W: Order Closed
+    end

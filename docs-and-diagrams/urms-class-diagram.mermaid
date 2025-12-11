@@ -1,0 +1,297 @@
+classDiagram
+    direction TB
+    
+    %% Core Module
+    class Tenant {
+        +UUID id
+        +String name
+        +String domain
+        +TenantStatus status
+        +JSON settings
+        +DateTime createdAt
+        +getSettings() Settings
+        +updateSettings(settings) void
+    }
+
+    class User {
+        +UUID id
+        +UUID tenantId
+        +String email
+        +String passwordHash
+        +UserRole role
+        +Boolean isActive
+        +DateTime lastLoginAt
+        +DateTime deletedAt
+        +authenticate(password) Boolean
+        +hasPermission(action) Boolean
+        +softDelete() void
+    }
+
+    class Notification {
+        +UUID id
+        +UUID tenantId
+        +UUID userId
+        +NotificationType type
+        +String title
+        +String message
+        +Boolean isRead
+        +markAsRead() void
+    }
+
+    %% Menu Module
+    class Category {
+        +UUID id
+        +UUID tenantId
+        +String name
+        +Int sortOrder
+        +Boolean isActive
+        +DateTime deletedAt
+        +getActiveItems() List~MenuItem~
+        +canDelete() Boolean
+    }
+
+    class MenuItem {
+        +UUID id
+        +UUID categoryId
+        +String name
+        +Decimal price
+        +Decimal costPrice
+        +Boolean isAvailable
+        +JSON allergens
+        +DateTime deletedAt
+        +toggleAvailability() void
+        +getTheoreticalCost() Decimal
+        +getModifierGroups() List~ModifierGroup~
+    }
+
+    class ModifierGroup {
+        +UUID id
+        +String name
+        +Int minSelection
+        +Int maxSelection
+        +Boolean isRequired
+        +validateSelection(count) Boolean
+        +getModifiers() List~Modifier~
+    }
+
+    class Modifier {
+        +UUID id
+        +UUID groupId
+        +String name
+        +Decimal priceAdjustment
+        +Boolean isAvailable
+    }
+
+    %% Inventory Module
+    class Ingredient {
+        +UUID id
+        +UUID supplierId
+        +String name
+        +String unit
+        +UnitCategory unitCategory
+        +Decimal currentStock
+        +Decimal reorderLevel
+        +Decimal costPerUnit
+        +isLowStock() Boolean
+        +deduct(quantity) void
+        +restock(quantity) void
+    }
+
+    class Recipe {
+        +UUID id
+        +UUID menuItemId
+        +String instructions
+        +Int yieldQuantity
+        +Decimal theoreticalCost
+        +calculateCost() Decimal
+        +getIngredients() List~RecipeItem~
+    }
+
+    class StockLog {
+        +UUID id
+        +UUID ingredientId
+        +StockAction action
+        +Decimal quantityChange
+        +Decimal balanceAfter
+        +DateTime createdAt
+        +create(data) StockLog
+    }
+
+    %% Order Module
+    class Order {
+        +UUID id
+        +UUID tenantId
+        +UUID tableId
+        +UUID staffId
+        +UUID customerId
+        +String orderNumber
+        +OrderStatus status
+        +OrderType orderType
+        +Decimal subtotal
+        +Decimal taxAmount
+        +Decimal discountAmount
+        +Decimal totalAmount
+        +addItem(item) OrderItem
+        +removeItem(itemId) void
+        +confirm() void
+        +calculateTotals() void
+        +canTransitionTo(status) Boolean
+        +processPayment(amount, method) Transaction
+    }
+
+    class OrderItem {
+        +UUID id
+        +UUID orderId
+        +UUID menuItemId
+        +String itemNameSnapshot
+        +Int quantity
+        +Decimal unitPrice
+        +JSON activeModifiers
+        +OrderItemStatus status
+        +markCooking() void
+        +markDone() void
+        +void(reason) void
+    }
+
+    class Transaction {
+        +UUID id
+        +UUID orderId
+        +Decimal amount
+        +Decimal tipAmount
+        +PaymentMethod method
+        +TransactionStatus status
+        +String gatewayRef
+        +process() Boolean
+        +refund(amount, reason) Refund
+        +generateFiscalReceipt() FiscalReceipt
+    }
+
+    class FiscalReceipt {
+        +UUID id
+        +UUID transactionId
+        +String receiptNumber
+        +String fiscalSignature
+        +String previousHash
+        +JSON rawDataSnapshot
+        +generateHash(prevHash) String
+        +verify() Boolean
+    }
+
+    %% Reservation Module
+    class Table {
+        +UUID id
+        +UUID floorId
+        +String tableNumber
+        +Int seatCapacity
+        +Int xCoord
+        +Int yCoord
+        +TableShape shape
+        +isOccupied() Boolean
+        +getActiveOrder() Order
+        +getUpcomingReservations() List~Reservation~
+    }
+
+    class Reservation {
+        +UUID id
+        +UUID tableId
+        +UUID customerId
+        +String confirmationCode
+        +DateTime startTime
+        +DateTime endTime
+        +Int partySize
+        +ReservationStatus status
+        +hasConflict() Boolean
+        +confirm() void
+        +seat() void
+        +markNoShow() void
+        +cancel() void
+    }
+
+    %% Logistics Module
+    class DeliveryZone {
+        +UUID id
+        +String name
+        +Geometry polygon
+        +Decimal areaSqkm
+        +Decimal deliveryFee
+        +Int estimatedMinutes
+        +containsPoint(lat, lng) Boolean
+    }
+
+    class Driver {
+        +UUID id
+        +UUID userId
+        +String vehicleType
+        +Decimal currentLat
+        +Decimal currentLng
+        +DriverStatus status
+        +Int activeOrderCount
+        +Decimal ratingAvg
+        +isAvailable() Boolean
+        +updateLocation(lat, lng) void
+        +assignOrder(shipment) void
+    }
+
+    class Shipment {
+        +UUID id
+        +UUID orderId
+        +UUID driverId
+        +String trackingCode
+        +String deliveryAddress
+        +ShipmentStatus status
+        +String proofPhotoUrl
+        +assign(driver) void
+        +markPickedUp() void
+        +markDelivered(proofUrl) void
+        +markFailed(reason) void
+    }
+
+    %% CRM Module
+    class Customer {
+        +UUID id
+        +UUID tenantId
+        +String firstName
+        +String lastName
+        +String email
+        +String phone
+        +Int loyaltyPoints
+        +Decimal totalSpent
+        +Int visitCount
+        +addLoyaltyPoints(points) void
+        +redeemPoints(points) void
+        +getOrderHistory() List~Order~
+    }
+
+    %% Relationships
+    Tenant "1" --o "*" User : has
+    Tenant "1" --o "*" Category : owns
+    Tenant "1" --o "*" Customer : serves
+    
+    Category "1" --o "*" MenuItem : contains
+    MenuItem "1" --o "*" ModifierGroup : has
+    ModifierGroup "1" --o "*" Modifier : contains
+    
+    MenuItem "1" --o "0..1" Recipe : has
+    Recipe "1" --o "*" Ingredient : requires
+    Ingredient "1" --o "*" StockLog : tracks
+    
+    Order "1" --o "*" OrderItem : contains
+    Order "1" --o "*" Transaction : paidBy
+    Order "*" --o "1" Table : at
+    Order "*" --o "0..1" Customer : placedBy
+    
+    Transaction "1" --o "1" FiscalReceipt : generates
+    
+    Table "1" --o "*" Reservation : reservedFor
+    Reservation "*" --o "0..1" Customer : madeBy
+    
+    Order "1" --o "0..1" Shipment : deliveredVia
+    Shipment "*" --o "1" Driver : assignedTo
+    Shipment "*" --o "1" DeliveryZone : inZone
+    
+    Driver "1" --o "1" User : is
+
+    %% Notes
+    note for StockLog "FR-19: Immutable - No UPDATE/DELETE"
+    note for FiscalReceipt "FR-27: Hash chain for tamper detection"
+    note for Order "FR-21: State machine transitions"

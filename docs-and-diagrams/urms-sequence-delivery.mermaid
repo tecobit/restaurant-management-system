@@ -1,0 +1,117 @@
+sequenceDiagram
+    autonumber
+    participant C as Customer
+    participant App as Customer App
+    participant API as Order Service
+    participant Geo as Geocoding Service
+    participant DB as PostgreSQL
+    participant DM as Dispatch Manager
+    participant DA as Driver App
+    participant D as Driver
+    participant N as Notification Service
+
+    rect rgb(240, 248, 255)
+        Note over C,DB: Phase 1: Delivery Zone Validation
+        C->>App: Enter Delivery Address
+        App->>API: POST /delivery/validate-address
+        API->>Geo: Geocode Address
+        Geo-->>API: Coordinates (lat, lng)
+        API->>DB: ST_Contains(zone.polygon, point)
+        Note right of DB: FR-33: Find smallest<br/>matching zone
+        
+        alt Outside All Zones
+            API-->>App: "Outside delivery area"
+            App-->>C: Show Error
+        else Inside Zone
+            DB-->>API: Zone + Delivery Fee
+            API-->>App: Valid + Fee + ETA
+            App-->>C: Show Delivery Fee
+        end
+    end
+
+    rect rgb(255, 250, 240)
+        Note over C,DB: Phase 2: Order Placement
+        C->>App: Place Delivery Order
+        App->>API: POST /orders (type=DELIVERY)
+        API->>DB: Create POS_Order
+        API->>DB: Create LOG_Shipment (PENDING)
+        API->>DB: Store delivery coordinates
+        API-->>App: Order Confirmed
+        App-->>C: Order #12345 Confirmed
+        API->>DM: Notify New Delivery Order
+    end
+
+    rect rgb(240, 255, 240)
+        Note over DM,D: Phase 3: Driver Assignment
+        DM->>DB: Query Available Drivers
+        Note right of DB: FR-34: status=IDLE OR<br/>(ON_JOB AND multi_dispatch=true)
+        DB-->>DM: Available Drivers + Locations
+        DM->>DM: Calculate Optimal Assignment
+        Note right of DM: Consider: distance,<br/>current load, rating
+        
+        DM->>DB: Update Shipment (driver_id, ASSIGNED)
+        DM->>DB: Update Driver (active_order_count++)
+        DM->>DA: Push Notification: New Order
+        DA-->>D: 🔔 New Delivery Request
+        
+        D->>DA: Accept Order
+        DA->>API: PATCH /shipments/{id}/accept
+        API->>DB: Update assigned_at timestamp
+        API->>N: Notify Customer
+        N-->>C: "Driver John is preparing your order"
+    end
+
+    rect rgb(255, 245, 238)
+        Note over D,C: Phase 4: Pickup & Transit
+        Note over D: Driver arrives at restaurant
+        D->>DA: Mark as Picked Up
+        DA->>API: PATCH /shipments/{id}/pickup
+        API->>DB: Update status = PICKED_UP
+        API->>DB: Update picked_up_at
+        API->>N: Notify Customer
+        N-->>C: "Driver has picked up your order"
+        
+        loop Every 30 seconds
+            DA->>API: POST /drivers/{id}/location
+            API->>DB: Insert LOG_DriverLocation
+            API->>DB: Update LOG_Driver (lat, lng)
+            API-->>App: WebSocket: Driver Location
+            App-->>C: Update Map Marker
+        end
+        
+        API->>DB: Update status = IN_TRANSIT
+    end
+
+    rect rgb(255, 240, 245)
+        Note over D,DB: Phase 5: Delivery & Proof
+        Note over D: Driver arrives at destination
+        D->>DA: Upload Proof Photo
+        DA->>API: POST /shipments/{id}/proof
+        API->>API: Validate Photo Metadata
+        Note right of API: FR-35: Check timestamp,<br/>GPS within 100m
+        
+        alt Invalid Proof
+            API-->>DA: "Photo validation failed"
+            DA-->>D: Retake Photo
+        else Valid Proof
+            API->>DB: Update proof_photo_url
+            D->>DA: Mark Delivered
+            DA->>API: PATCH /shipments/{id}/deliver
+            API->>DB: Update status = DELIVERED
+            API->>DB: Update delivered_at
+            API->>DB: Update Driver (active_order_count--)
+            API->>DB: Update Driver (total_deliveries++)
+            API->>N: Notify Customer
+            N-->>C: "Your order has been delivered! 📦"
+        end
+    end
+
+    rect rgb(245, 245, 255)
+        Note over C,DB: Phase 6: Rating & Completion
+        C->>App: Rate Delivery (⭐⭐⭐⭐⭐)
+        App->>API: POST /shipments/{id}/rating
+        API->>DB: Update Driver rating_avg
+        API->>DB: Update Order status = COMPLETED
+        API-->>App: Thank You!
+        App-->>C: "Thanks for your feedback!"
+    end

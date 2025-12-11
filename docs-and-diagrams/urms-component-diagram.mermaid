@@ -1,0 +1,152 @@
+flowchart TB
+    subgraph Presentation["Presentation Layer"]
+        subgraph WebApps["Web Applications"]
+            CustomerWeb["Customer Portal<br/>Next.js SSR"]
+            AdminWeb["Admin Dashboard<br/>React SPA"]
+            POSWeb["POS Application<br/>React + Electron"]
+        end
+        
+        subgraph MobileApps["Mobile Applications"]
+            CustomerMobile["Customer App<br/>React Native"]
+            DriverMobile["Driver App<br/>React Native"]
+        end
+        
+        subgraph Displays["Display Systems"]
+            KDSDisplay["Kitchen Display<br/>React + WebSocket"]
+            QueueDisplay["Queue Display<br/>React"]
+        end
+    end
+
+    subgraph APIGateway["API Gateway Layer"]
+        Gateway["Kong / AWS API Gateway"]
+        AuthMiddleware["Auth Middleware"]
+        RateLimiter["Rate Limiter"]
+        TenantResolver["Tenant Resolver"]
+    end
+
+    subgraph Application["Application Layer (Microservices)"]
+        subgraph CoreServices["Core Services"]
+            AuthService["Auth Service<br/>JWT, OAuth2"]
+            TenantService["Tenant Service<br/>Multi-tenancy"]
+            UserService["User Service<br/>RBAC"]
+            NotificationService["Notification Service<br/>Push, SMS, Email"]
+        end
+
+        subgraph BusinessServices["Business Services"]
+            MenuService["Menu Service<br/>Catalog Management"]
+            OrderService["Order Service<br/>Order Processing"]
+            PaymentService["Payment Service<br/>Transactions"]
+            InventoryService["Inventory Service<br/>Stock Management"]
+        end
+
+        subgraph OperationServices["Operation Services"]
+            ReservationService["Reservation Service<br/>Table Booking"]
+            DeliveryService["Delivery Service<br/>Logistics"]
+            KitchenService["Kitchen Service<br/>KDS Integration"]
+            HRMService["HRM Service<br/>Staff Management"]
+        end
+
+        subgraph IntegrationServices["Integration Services"]
+            FiscalService["Fiscal Service<br/>Tax Compliance"]
+            ReportService["Report Service<br/>Analytics"]
+            CMSService["CMS Service<br/>Content"]
+            LoyaltyService["Loyalty Service<br/>Points & Promos"]
+        end
+    end
+
+    subgraph Messaging["Messaging Layer"]
+        EventBus["Event Bus<br/>RabbitMQ / SQS"]
+        
+        subgraph Events["Domain Events"]
+            OrderEvents["Order Events"]
+            InventoryEvents["Inventory Events"]
+            PaymentEvents["Payment Events"]
+            NotificationEvents["Notification Events"]
+        end
+    end
+
+    subgraph Data["Data Layer"]
+        subgraph Databases["Databases"]
+            PostgreSQL[("PostgreSQL<br/>Primary DB")]
+            Redis[("Redis<br/>Cache + Sessions")]
+            OpenSearch[("OpenSearch<br/>Full-text Search")]
+        end
+        
+        subgraph Storage["Object Storage"]
+            S3[("S3<br/>Media Files")]
+        end
+    end
+
+    subgraph External["External Integrations"]
+        subgraph Payments["Payment Gateways"]
+            Stripe["Stripe"]
+            Square["Square"]
+            PayPal["PayPal"]
+        end
+        
+        subgraph Communications["Communication"]
+            Twilio["Twilio SMS"]
+            SendGrid["SendGrid Email"]
+            Firebase["Firebase Push"]
+        end
+        
+        subgraph Maps["Location Services"]
+            GoogleMaps["Google Maps"]
+            Mapbox["Mapbox"]
+        end
+    end
+
+    %% Presentation to Gateway
+    CustomerWeb --> Gateway
+    AdminWeb --> Gateway
+    POSWeb --> Gateway
+    CustomerMobile --> Gateway
+    DriverMobile --> Gateway
+    KDSDisplay --> Gateway
+    
+    %% Gateway to Middleware
+    Gateway --> AuthMiddleware
+    AuthMiddleware --> RateLimiter
+    RateLimiter --> TenantResolver
+    
+    %% Middleware to Services
+    TenantResolver --> CoreServices
+    TenantResolver --> BusinessServices
+    TenantResolver --> OperationServices
+    TenantResolver --> IntegrationServices
+    
+    %% Service to Service Communication
+    OrderService --> InventoryService
+    OrderService --> PaymentService
+    OrderService --> KitchenService
+    OrderService --> DeliveryService
+    PaymentService --> FiscalService
+    ReservationService --> NotificationService
+    
+    %% Services to Event Bus
+    OrderService --> EventBus
+    PaymentService --> EventBus
+    InventoryService --> EventBus
+    EventBus --> Events
+    
+    %% Events to Handlers
+    OrderEvents --> NotificationService
+    InventoryEvents --> ReportService
+    PaymentEvents --> LoyaltyService
+    
+    %% Services to Data
+    CoreServices --> PostgreSQL
+    BusinessServices --> PostgreSQL
+    OperationServices --> PostgreSQL
+    IntegrationServices --> PostgreSQL
+    
+    CoreServices --> Redis
+    BusinessServices --> Redis
+    
+    MenuService --> OpenSearch
+    CMSService --> S3
+    
+    %% External Integrations
+    PaymentService --> Payments
+    NotificationService --> Communications
+    DeliveryService --> Maps

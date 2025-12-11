@@ -1,0 +1,53 @@
+stateDiagram-v2
+    [*] --> DRAFT: Create Order
+
+    DRAFT --> CONFIRMED: Submit Order
+    DRAFT --> CANCELLED: Cancel
+
+    CONFIRMED --> KITCHEN: Auto-transition
+    CONFIRMED --> CANCELLED: Manager Cancel
+
+    KITCHEN --> READY: All Items Done
+    KITCHEN --> CANCELLED: Manager Cancel
+
+    READY --> SERVED: Mark Served (Dine-in)
+    READY --> PICKED_UP: Driver Pickup (Delivery)
+    READY --> HANDED_OUT: Customer Pickup (Takeout)
+    READY --> CANCELLED: Manager Cancel
+
+    SERVED --> PAID: Payment Received
+    PICKED_UP --> DELIVERED: Proof of Delivery
+    HANDED_OUT --> PAID: Payment Received
+
+    DELIVERED --> PAID: Auto-confirm
+    
+    PAID --> COMPLETED: Close Order
+    PAID --> REFUNDED: Full Refund
+
+    COMPLETED --> [*]
+    CANCELLED --> [*]
+    REFUNDED --> [*]
+
+    note right of DRAFT
+        - Items can be added/removed
+        - No inventory deduction
+        - No kitchen notification
+    end note
+
+    note right of CONFIRMED
+        - Inventory deducted (FR-18)
+        - Stock log created
+        - Order number assigned
+    end note
+
+    note right of KITCHEN
+        - Items sent to KDS
+        - Individual item status tracked
+        - Prep time monitoring
+    end note
+
+    note right of PAID
+        - Transaction recorded
+        - Fiscal receipt generated (FR-27)
+        - Loyalty points awarded
+    end note

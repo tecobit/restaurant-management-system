@@ -1,0 +1,104 @@
+sequenceDiagram
+    autonumber
+    participant C as Customer
+    participant POS as POS Terminal
+    participant API as Payment Service
+    participant DB as Database
+    participant Stripe as Stripe API
+    participant Fiscal as Fiscal Service
+    participant N as Notification
+
+    rect rgb(240, 248, 255)
+        Note over C,DB: Scenario 1: Single Card Payment
+        C->>POS: Request to Pay
+        POS->>API: GET /orders/{id}/summary
+        API->>DB: Calculate totals
+        API-->>POS: Order Total: $85.50
+        
+        POS->>POS: Customer taps card
+        POS->>API: POST /payments/intent
+        API->>Stripe: Create PaymentIntent
+        Stripe-->>API: client_secret
+        API-->>POS: Payment Intent Created
+        
+        POS->>Stripe: Confirm Payment (card token)
+        Stripe-->>POS: Payment Succeeded
+        
+        POS->>API: POST /orders/{id}/transactions
+        Note right of API: amount: $85.50<br/>method: CARD<br/>gateway_ref: pi_xxx
+        API->>DB: Insert POS_Transaction
+        API->>DB: Update Order status = PAID
+        API-->>POS: Transaction Recorded
+    end
+
+    rect rgb(255, 250, 240)
+        Note over C,N: Scenario 2: Split Bill (FR-25)
+        C->>POS: Split bill 3 ways
+        POS->>API: GET /orders/{id}/summary
+        API-->>POS: Total: $120.00
+
+        loop For Each Person (3x)
+            POS->>POS: Person pays $40.00
+            POS->>API: POST /orders/{id}/transactions
+            Note right of API: amount: $40.00<br/>Running total tracked
+            API->>DB: Insert POS_Transaction
+            API->>DB: Check if fully paid
+        end
+        
+        API->>DB: Sum(transactions) >= order_total
+        API->>DB: Update Order status = PAID
+        API-->>POS: Order Fully Paid
+    end
+
+    rect rgb(240, 255, 240)
+        Note over C,N: Scenario 3: Payment with Tip (FR-26)
+        C->>POS: Pay $50 + $10 tip
+        POS->>API: POST /orders/{id}/transactions
+        Note right of API: amount: $50.00<br/>tip_amount: $10.00
+        API->>DB: Insert POS_Transaction
+        Note right of DB: Tip tracked separately<br/>for staff payout
+        API->>DB: Update Order status = PAID
+        API-->>POS: Payment Complete
+    end
+
+    rect rgb(255, 240, 245)
+        Note over API,N: Fiscal Receipt Generation (FR-27)
+        API->>Fiscal: Generate Receipt
+        Fiscal->>DB: Get Previous Receipt
+        DB-->>Fiscal: previous_hash: abc123...
+        
+        Fiscal->>Fiscal: Build Receipt Data
+        Note right of Fiscal: {order_id, items,<br/>total, tax, timestamp}
+        
+        Fiscal->>Fiscal: Calculate Hash
+        Note right of Fiscal: SHA256(data + prev_hash + timestamp)
+        
+        Fiscal->>DB: Insert POS_FiscalReceipt
+        Note right of DB: receipt_number: R-2024-00001<br/>fiscal_signature: def456...<br/>previous_hash: abc123...
+        
+        Fiscal-->>API: Receipt Generated
+        API->>POS: Print/Email Receipt
+        API->>N: Send Digital Receipt
+        N-->>C: 📧 Receipt Email
+    end
+
+    rect rgb(245, 245, 255)
+        Note over C,DB: Scenario 4: Refund
+        C->>POS: Request Refund
+        POS->>API: POST /transactions/{id}/refund
+        Note right of API: amount: $25.00<br/>reason: "Item not as described"
+        
+        API->>DB: Validate: refund <= original
+        API->>Stripe: Create Refund
+        Stripe-->>API: Refund Succeeded
+        
+        API->>DB: Insert POS_Refund
+        API->>DB: Update Transaction status
+        
+        API->>Fiscal: Generate Refund Receipt
+        Note right of Fiscal: Negative amount receipt<br/>Links to original
+        
+        API-->>POS: Refund Processed
+        API->>N: Send Refund Confirmation
+        N-->>C: 📧 Refund Email
+    end
